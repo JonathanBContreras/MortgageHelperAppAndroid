@@ -56,3 +56,38 @@ Tax, insurance, and HOA stay constant throughout all scenarios. Totals exclude
 down payment, closing costs, maintenance, and PMI. No future property appreciation,
 insurance inflation, or tax law changes are assumed. Inputs and state selection
 are retained locally between app sessions.
+
+## Fixed versus variable comparison
+
+The Comparison tab's action holds principal, term, property tax, insurance, and
+HOA constant and compares the entered fixed-rate quote against the calculator's
+initial rate and variable settings. If the calculator is in fixed mode, variable
+comparison uses the documented default five-year initial period, 2-point annual
+cap, 5-point lifetime cap, and historical central scenario; these assumptions
+appear above the comparison action. Initial and peak monthly costs include the
+same ownership costs. The total-cost difference therefore equals the difference
+in interest, not a difference in taxes or insurance. The existing 15/30-year
+comparison remains available below this action.
+
+## Early payoff
+
+Extra payments are principal-only additions to the selected calculator schedule:
+a recurring monthly amount beginning at a specified month, plus an optional
+one-time lump sum at another specified month. Month 1 is the loan's first payment.
+Interest accrues on the opening monthly balance before that month's scheduled
+and extra principal payments. Payments are capped at the amount needed to clear
+the balance; subsequent payments stop. A lump sum scheduled after payoff has no
+effect. Amounts use full precision internally and are displayed to cents.
+
+The borrower maintains the baseline principal-and-interest payment schedule,
+including its projected changes for a variable loan, rather than recasting to a
+lower required payment after prepayment. Actual lender servicing and reset rules
+may differ. The tab identifies this assumption. This is a scenario from loan
+origination, not a payoff quote for an existing loan at an unspecified date.
+
+Savings are baseline interest minus custom-scenario interest. Principal is still
+repaid; taxes, insurance, and HOA continue and are never counted as avoided costs.
+The results also show payoff month, months saved, principal plus interest costs,
+and the last loan payment. No prepayment penalties, fees, tax deductions, or
+alternative investment returns are modeled. See the CFPB explanation of
+[prepayment penalties](https://www.consumerfinance.gov/ask-cfpb/what-is-a-prepayment-penalty-en-1957/).
