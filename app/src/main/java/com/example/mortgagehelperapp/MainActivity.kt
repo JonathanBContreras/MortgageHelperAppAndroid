@@ -52,7 +52,4 @@ class MainActivity : AppCompatActivity() {
         }.attach()
     }
 
-    fun updateAmortizationChart(calculation: MortgageCalculation) {
-        amortizationFragment.updateAmortizationSchedule(calculation)
-    }
 } 

@@ -75,29 +75,17 @@ class AmortizationFragment : Fragment() {
         var totalPrincipal = 0.0
         var totalInterest = 0.0
         var totalTaxes = 0.0
-        var remainingBalance = calculation.monthlyBreakdown.loanAmount
-        val monthlyRate = calculation.monthlyBreakdown.interestRate / 100 / 12
-        val payment = calculation.monthlyBreakdown.principalAndInterest
-        val monthlyTax = calculation.monthlyBreakdown.propertyTax
-        val monthlyFees = calculation.monthlyBreakdown.hoaFees + calculation.monthlyBreakdown.homeInsurance
-
-        for (year in 1..years) {
-            var yearPrincipal = 0.0
-            var yearInterest = 0.0
-            var yearTaxes = 0.0
-            for (month in 1..12) {
-                val interest = remainingBalance * monthlyRate
-                val principal = payment - interest
-                yearPrincipal += principal
-                yearInterest += interest
-                yearTaxes += monthlyTax + monthlyFees
-                remainingBalance -= principal
-            }
-            totalPrincipal += yearPrincipal
-            totalInterest += yearInterest
-            totalTaxes += yearTaxes
-            principalEntries.add(BarEntry(year.toFloat(), floatArrayOf(yearPrincipal.toFloat(), yearInterest.toFloat(), yearTaxes.toFloat())))
-            balanceEntries.add(Entry(year.toFloat(), remainingBalance.toFloat()))
+        val monthlyFees = calculation.monthlyBreakdown.propertyTax +
+            calculation.monthlyBreakdown.hoaFees + calculation.monthlyBreakdown.homeInsurance
+        calculation.schedule.chunked(12).forEachIndexed { year, payments ->
+            val principal = payments.sumOf { it.principal }
+            val interest = payments.sumOf { it.interest }
+            val taxes = monthlyFees * payments.size
+            totalPrincipal += principal
+            totalInterest += interest
+            totalTaxes += taxes
+            principalEntries.add(BarEntry(year.toFloat(), floatArrayOf(principal.toFloat(), interest.toFloat(), taxes.toFloat())))
+            balanceEntries.add(Entry(year.toFloat(), payments.last().balance.toFloat()))
         }
 
         val barDataSet = BarDataSet(principalEntries, "").apply {

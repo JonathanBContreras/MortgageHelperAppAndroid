@@ -1,105 +1,63 @@
 package com.example.mortgagehelperapp
 
 import androidx.lifecycle.ViewModel
-import kotlin.math.pow
+import kotlin.math.expm1
+import kotlin.math.ln1p
 
 class MortgageViewModel : ViewModel() {
-    
     fun calculateMortgage(
-        homePrice: Double,
-        squareFootage: Double?,
-        downPayment: Double,
-        isDownPaymentPercentage: Boolean,
-        interestRate: Double,
-        loanTermYears: Int,
-        hoaFees: Double?
+        homePrice: Double, squareFootage: Double?, downPayment: Double,
+        isDownPaymentPercentage: Boolean, interestRate: Double, loanTermYears: Int,
+        hoaFees: Double?, propertyTaxPercent: Double = 1.0,
+        annualHomeInsurance: Double = homePrice * 0.005,
+        variableRate: VariableRateOptions? = null
     ): MortgageCalculation {
-        // Calculate loan amount
-        val actualDownPayment = if (isDownPaymentPercentage) {
-            homePrice * (downPayment / 100)
-        } else {
-            downPayment
+        require(homePrice.isFinite() && homePrice > 0) { "Home price must be greater than zero" }
+        require(downPayment.isFinite() && downPayment >= 0 &&
+            downPayment <= if (isDownPaymentPercentage) 100.0 else homePrice) { "Down payment must be between zero and the home price (or 100%)" }
+        require(squareFootage == null || squareFootage.isFinite() && squareFootage > 0) { "Square footage must be greater than zero" }
+        require(hoaFees == null || hoaFees.isFinite() && hoaFees >= 0) { "HOA fees cannot be negative" }
+        require(propertyTaxPercent.isFinite() && propertyTaxPercent in 0.0..20.0) { "Property tax must be 0–20%" }
+        require(annualHomeInsurance.isFinite() && annualHomeInsurance >= 0) { "Annual insurance cannot be negative" }
+        val rates = RateProjection.yearlyRates(interestRate, loanTermYears, variableRate)
+        val loan = homePrice - if (isDownPaymentPercentage) homePrice * downPayment / 100 else downPayment
+        val months = loanTermYears * 12
+        val tax = homePrice * propertyTaxPercent / 100 / 12
+        val insurance = annualHomeInsurance / 12
+        val fees = tax + insurance + (hoaFees ?: 0.0)
+        var balance = loan
+        var payment = 0.0
+        val schedule = List(months) { index ->
+            val rate = rates[index / 12]
+            val monthlyRate = rate / 1200
+            if (index % 12 == 0) {
+                payment = if (monthlyRate == 0.0) balance / (months - index)
+                else balance * monthlyRate / -expm1(-(months - index) * ln1p(monthlyRate))
+            }
+            val interest = balance * monthlyRate
+            val principal = if (index == months - 1) balance else (payment - interest).coerceIn(0.0, balance)
+            balance = (balance - principal).coerceAtLeast(0.0)
+            MortgagePayment(index + 1, rate, principal, interest, balance, principal + interest + fees)
         }
-        val loanAmount = homePrice - actualDownPayment
-
-        // Calculate monthly interest rate and number of payments
-        val monthlyRate = interestRate / 100 / 12
-        val numberOfPayments = loanTermYears * 12
-
-        // Calculate monthly principal and interest payment
-        val monthlyPrincipalAndInterest = loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments.toDouble())) /
-                (Math.pow(1 + monthlyRate, numberOfPayments.toDouble()) - 1)
-
-        // Calculate property tax (1% of home price annually)
-        val annualPropertyTax = homePrice * 0.01
-        val monthlyPropertyTax = annualPropertyTax / 12
-
-        // Calculate home insurance (0.5% of home price annually)
-        val annualHomeInsurance = homePrice * 0.005
-        val monthlyHomeInsurance = annualHomeInsurance / 12
-
-        // Calculate total monthly payment
-        val monthlyPayment = monthlyPrincipalAndInterest + monthlyPropertyTax + monthlyHomeInsurance + (hoaFees ?: 0.0)
-
-        // Calculate total cost
-        val totalCost = monthlyPayment * numberOfPayments
-
-        // Calculate total principal and interest
-        val totalPrincipal = loanAmount
-        val totalInterest = (monthlyPrincipalAndInterest * numberOfPayments) - loanAmount
-
-        // Calculate cost per square foot if square footage is provided
-        val costPerSqFt = squareFootage?.let { homePrice / it }
-
-        // Create monthly breakdown
-        val monthlyBreakdown = MonthlyBreakdown(
-            principalAndInterest = monthlyPrincipalAndInterest,
-            propertyTax = monthlyPropertyTax,
-            homeInsurance = monthlyHomeInsurance,
-            hoaFees = hoaFees ?: 0.0,
-            interestRate = interestRate,
-            loanTermYears = loanTermYears,
-            loanAmount = loanAmount
-        )
-
         return MortgageCalculation(
-            monthlyPayment = monthlyPayment,
-            totalCost = totalCost,
-            totalPrincipal = totalPrincipal,
-            totalInterest = totalInterest,
-            costPerSqFt = costPerSqFt,
-            monthlyBreakdown = monthlyBreakdown
+            monthlyPayment = schedule.first().totalPayment,
+            totalCost = schedule.sumOf { it.totalPayment }, totalPrincipal = loan,
+            totalInterest = schedule.sumOf { it.interest }, costPerSqFt = squareFootage?.let { homePrice / it },
+            monthlyBreakdown = MonthlyBreakdown(schedule.first().principal + schedule.first().interest,
+                tax, insurance, hoaFees ?: 0.0, interestRate, loanTermYears, loan),
+            schedule = schedule, variableRate = variableRate
         )
     }
 
     fun compareLoans(
-        homePrice: Double,
-        squareFootage: Double?,
-        downPayment: Double,
-        isDownPaymentPercentage: Boolean,
-        interestRate: Double,
-        hoaFees: Double?
-    ): LoanComparison {
-        val loan15Year = calculateMortgage(
-            homePrice = homePrice,
-            squareFootage = squareFootage,
-            downPayment = downPayment,
-            isDownPaymentPercentage = isDownPaymentPercentage,
-            interestRate = interestRate,
-            loanTermYears = 15,
-            hoaFees = hoaFees
-        )
-
-        val loan30Year = calculateMortgage(
-            homePrice = homePrice,
-            squareFootage = squareFootage,
-            downPayment = downPayment,
-            isDownPaymentPercentage = isDownPaymentPercentage,
-            interestRate = interestRate,
-            loanTermYears = 30,
-            hoaFees = hoaFees
-        )
-
-        return LoanComparison(loan15Year, loan30Year)
-    }
-} 
+        homePrice: Double, squareFootage: Double?, downPayment: Double,
+        isDownPaymentPercentage: Boolean, interestRate: Double, hoaFees: Double?,
+        propertyTaxPercent: Double = 1.0, annualHomeInsurance: Double = homePrice * 0.005,
+        variableRate: VariableRateOptions? = null
+    ) = LoanComparison(
+        calculateMortgage(homePrice, squareFootage, downPayment, isDownPaymentPercentage, interestRate, 15,
+            hoaFees, propertyTaxPercent, annualHomeInsurance, variableRate),
+        calculateMortgage(homePrice, squareFootage, downPayment, isDownPaymentPercentage, interestRate, 30,
+            hoaFees, propertyTaxPercent, annualHomeInsurance, variableRate)
+    )
+}
