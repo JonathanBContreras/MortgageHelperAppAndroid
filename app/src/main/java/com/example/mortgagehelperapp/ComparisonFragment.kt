@@ -38,11 +38,52 @@ class ComparisonFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        AmountFormatting.attach(binding.fixedQuoteInput)
+        binding.compareRateTypesButton.setOnClickListener { compareRateTypes() }
+        sharedViewModel.calculation.observe(viewLifecycleOwner) { calc ->
+            binding.compareRateTypesButton.isEnabled = calc != null
+            binding.rateComparisonResults.text = ""
+            if (calc != null) {
+                binding.fixedQuoteInput.setText(calc.monthlyBreakdown.interestRate.toString())
+                val options = calc.variableRate ?: VariableRateOptions()
+                binding.rateComparisonSummary.text = "Same ${calc.monthlyBreakdown.loanTermYears}-year term, principal, taxes, insurance and HOA. " +
+                    "Variable starts at ${calc.monthlyBreakdown.interestRate}%; ${options.fixedYears} years fixed, then annual resets. " +
+                    "${options.scenario.label}; annual cap ${options.annualCap} points, lifetime cap ${options.lifetimeCap} points. " +
+                    "Enter a fixed quote below. Variable costs are estimates."
+            }
+        }
+        binding.fixedQuoteInput.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { binding.rateComparisonResults.text = "" }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
         sharedViewModel.comparison.observe(viewLifecycleOwner, Observer { comp ->
             if (comp != null) {
                 updateComparisonChart(comp)
             }
         })
+    }
+
+    private fun compareRateTypes() {
+        val base = sharedViewModel.calculation.value ?: return
+        try {
+            val rate = binding.fixedQuoteInput.text.toString().replace(",", "").toDoubleOrNull()
+                ?: throw IllegalArgumentException("Enter a fixed-rate quote")
+            val comparison = PaymentScenarios.compareRates(base, rate)
+            val fixed = comparison.fixed
+            val variable = comparison.variable
+            val difference = fixed.totalCost - variable.totalCost
+            fun money(value: Double) = currencyFormat.format(value)
+            binding.rateComparisonResults.text =
+                "Fixed / Variable\n" +
+                "Initial monthly: ${money(fixed.monthlyPayment)} / ${money(variable.monthlyPayment)}\n" +
+                "Peak monthly: ${money(fixed.schedule.maxOf { it.totalPayment })} / ${money(variable.schedule.maxOf { it.totalPayment })}\n" +
+                "Total interest: ${money(fixed.totalInterest)} / ${money(variable.totalInterest)}\n" +
+                "Total cost: ${money(fixed.totalCost)} / ${money(variable.totalCost)}\n\n" +
+                if (difference >= 0) "Estimated variable savings: ${money(difference)}" else "Estimated extra variable cost: ${money(-difference)}"
+        } catch (e: IllegalArgumentException) {
+            binding.rateComparisonResults.text = e.message
+        }
     }
 
     fun updateComparisonChart(comparison: LoanComparison) {

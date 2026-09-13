@@ -40,6 +40,7 @@ class CalculatorFragment : Fragment() {
         setupEstimates()
         setupChart()
         setupListeners()
+        inputFields().forEach { AmountFormatting.attach(it) }
         restoreInputs()
         sharedViewModel.calculation.observe(viewLifecycleOwner) { result ->
             result?.let { displayResults(it) }

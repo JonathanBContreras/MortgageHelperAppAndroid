@@ -1,0 +1,24 @@
+<?xml version="1.0" ?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+        <TextView android:id="@+id/payoffTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp" android:textSize="24sp" android:text="Early payoff"/>
+        <TextView android:id="@+id/payoffLoanSummary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp" android:textSize="16sp" android:text="Calculate a mortgage in the Calculator tab first."/>
+        <TextView android:id="@+id/payoffExplanation" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp" android:textSize="16sp" android:text="Add extra principal to your scheduled payments. Month 1 is the first loan payment. For variable loans, the original projected payment path is maintained; extra payments do not recast it."/>
+        <com.google.android.material.textfield.TextInputLayout style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp" android:hint="Extra principal each month ($)">
+            <com.google.android.material.textfield.TextInputEditText android:id="@+id/monthlyExtraInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="numberDecimal" android:text="0"/>
+        </com.google.android.material.textfield.TextInputLayout>
+        <com.google.android.material.textfield.TextInputLayout style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp" android:hint="Start recurring extra at month">
+            <com.google.android.material.textfield.TextInputEditText android:id="@+id/extraStartingMonthInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="numberDecimal" android:text="1"/>
+        </com.google.android.material.textfield.TextInputLayout>
+        <com.google.android.material.textfield.TextInputLayout style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp" android:hint="One-time extra principal ($)">
+            <com.google.android.material.textfield.TextInputEditText android:id="@+id/lumpSumInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="numberDecimal" android:text="0"/>
+        </com.google.android.material.textfield.TextInputLayout>
+        <com.google.android.material.textfield.TextInputLayout style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp" android:hint="Pay lump sum at month">
+            <com.google.android.material.textfield.TextInputEditText android:id="@+id/lumpSumMonthInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="numberDecimal" android:text="1"/>
+        </com.google.android.material.textfield.TextInputLayout>
+        <com.google.android.material.button.MaterialButton android:id="@+id/calculatePayoffButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Compare early payoff"/>
+        <TextView android:id="@+id/payoffError" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp" android:textSize="16sp" android:text=""/>
+        <TextView android:id="@+id/payoffResults" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp" android:textSize="16sp" android:text=""/>
+        <TextView android:id="@+id/payoffNotes" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp" android:textSize="16sp" android:text="Savings are avoided mortgage interest only. Property tax, insurance and HOA continue after payoff. Assumes extra payments go to principal without prepayment penalties. Variable-rate savings depend on the selected rate scenario."/>
+    </LinearLayout>
+</ScrollView>
