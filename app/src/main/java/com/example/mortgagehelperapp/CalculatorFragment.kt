@@ -2,8 +2,6 @@ package com.example.mortgagehelperapp
 
 import android.graphics.Color
 import android.os.Bundle
-import android.text.Editable
-import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -27,9 +25,6 @@ class CalculatorFragment : Fragment() {
     private val viewModel = MortgageViewModel()
     private val sharedViewModel: SharedMortgageViewModel by activityViewModels()
     private val currencyFormat = NumberFormat.getCurrencyInstance(Locale.US)
-    private val numberFormat = NumberFormat.getNumberInstance(Locale.US).apply {
-        maximumFractionDigits = 2
-    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -42,44 +37,88 @@ class CalculatorFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        setupNumberFormatting()
+        setupEstimates()
         setupChart()
         setupListeners()
+        restoreInputs()
+        sharedViewModel.calculation.observe(viewLifecycleOwner) { result ->
+            result?.let { displayResults(it) }
+        }
     }
 
-    private fun setupNumberFormatting() {
-        val textWatcher = object : TextWatcher {
-            private var isUpdating = false
+    private fun requiredNumber(input: android.widget.EditText, label: String): Double =
+        input.text.toString().replace(",", "").toDoubleOrNull()
+            ?.takeIf { it.isFinite() } ?: throw IllegalArgumentException("Enter a valid $label")
 
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+    private fun optionalNumber(input: android.widget.EditText, label: String): Double? =
+        if (input.text.isNullOrBlank()) null else requiredNumber(input, label)
 
-            override fun afterTextChanged(s: Editable?) {
-                if (isUpdating) return
-                isUpdating = true
-
-                val input = s.toString().replace(Regex("[^\\d.]"), "")
-                if (input.isNotEmpty()) {
-                    val number = input.toDoubleOrNull()
-                    if (number != null) {
-                        val formatted = if (input.contains(".")) {
-                            String.format("%.2f", number)
-                        } else {
-                            numberFormat.format(number)
-                        }
-                        s?.replace(0, s.length, formatted)
-                    }
+    private fun setupEstimates() {
+        binding.stateSpinner.adapter = android.widget.ArrayAdapter(requireContext(),
+            android.R.layout.simple_spinner_dropdown_item, listOf("Select purchase state") + StateEstimates.all.map { it.name })
+        binding.scenarioSpinner.adapter = android.widget.ArrayAdapter(requireContext(),
+            android.R.layout.simple_spinner_dropdown_item, RateScenario.entries.toList())
+        binding.stateSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (position > 0 && position != lastStatePosition) {
+                    val state = StateEstimates.all[position - 1]
+                    binding.propertyTaxInput.setText(state.taxPercent.toString())
+                    binding.insuranceInput.setText(state.annualInsurance.toInt().toString())
                 }
-
-                isUpdating = false
+                lastStatePosition = position
             }
         }
+        binding.variableRateSwitch.setOnCheckedChangeListener { _, checked ->
+            binding.variableOptions.visibility = if (checked) View.VISIBLE else View.GONE
+        }
+        binding.marketInfo.text = "Rate snapshot · September 10, 2026\n30-year fixed: 6.76% · 15-year fixed: 6.09%\n30-year: +0.05 percentage points over the prior week; 6.35% a year earlier. National averages, not a personal quote or ARM index."
+        binding.latestRatesButton.setOnClickListener { openSource("https://www.freddiemac.com/pmms") }
+        binding.estimateSourcesButton.setOnClickListener {
+            androidx.appcompat.app.AlertDialog.Builder(requireContext()).setTitle("Estimate sources")
+                .setItems(arrayOf("Property tax: Tax Foundation / Census (2024)", "Insurance: Insurance.com (2026, $300,000 coverage)", "Rate history: Freddie Mac (2015–2024)")) { _, which ->
+                    openSource(listOf("https://taxfoundation.org/data/all/state/property-taxes-by-state-county/",
+                        "https://www.insurance.com/home-and-renters-insurance/home-insurance-basics/average-homeowners-insurance-rates-by-state",
+                        "https://www.freddiemac.com/pmms/archive")[which])
+                }.show()
+        }
+    }
 
-        binding.homePriceInput.addTextChangedListener(textWatcher)
-        binding.squareFootageInput.addTextChangedListener(textWatcher)
-        binding.downPaymentInput.addTextChangedListener(textWatcher)
-        binding.interestRateInput.addTextChangedListener(textWatcher)
-        binding.hoaFeesInput.addTextChangedListener(textWatcher)
+    private var lastStatePosition = 0
+
+    private fun openSource(url: String) {
+        try { startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
+        catch (_: android.content.ActivityNotFoundException) { Toast.makeText(context, url, Toast.LENGTH_LONG).show() }
+    }
+
+    private fun inputFields() = listOf(binding.homePriceInput, binding.squareFootageInput,
+        binding.downPaymentInput, binding.interestRateInput, binding.hoaFeesInput,
+        binding.propertyTaxInput, binding.insuranceInput, binding.fixedYearsInput,
+        binding.annualCapInput, binding.lifetimeCapInput)
+
+    private fun restoreInputs() {
+        val prefs = requireContext().getSharedPreferences("mortgage_inputs", 0)
+        lastStatePosition = prefs.getInt("state", 0).coerceIn(0, StateEstimates.all.size)
+        binding.stateSpinner.setSelection(lastStatePosition)
+        inputFields().forEach { field ->
+            prefs.getString(resources.getResourceEntryName(field.id), null)?.let { field.setText(it) }
+        }
+        binding.variableRateSwitch.isChecked = prefs.getBoolean("variable", false)
+        binding.variableOptions.visibility = if (binding.variableRateSwitch.isChecked) View.VISIBLE else View.GONE
+        binding.scenarioSpinner.setSelection(prefs.getInt("scenario", 0).coerceIn(0, 2))
+        binding.downPaymentTypeGroup.check(if (prefs.getBoolean("percent", false)) R.id.downPaymentPercent else R.id.downPaymentAmount)
+        binding.loanTermGroup.check(if (prefs.getBoolean("fifteen", false)) R.id.loanTerm15 else R.id.loanTerm30)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        val prefs = requireContext().getSharedPreferences("mortgage_inputs", 0).edit()
+        inputFields().forEach { prefs.putString(resources.getResourceEntryName(it.id), it.text.toString()) }
+        prefs.putInt("state", binding.stateSpinner.selectedItemPosition)
+            .putInt("scenario", binding.scenarioSpinner.selectedItemPosition)
+            .putBoolean("variable", binding.variableRateSwitch.isChecked)
+            .putBoolean("percent", binding.downPaymentPercent.isChecked)
+            .putBoolean("fifteen", binding.loanTerm15.isChecked).apply()
     }
 
     private fun setupChart() {
@@ -111,12 +150,12 @@ class CalculatorFragment : Fragment() {
     private fun setupListeners() {
         binding.calculateButton.setOnClickListener {
             try {
-                val homePrice = binding.homePriceInput.text.toString().replace(Regex("[^\\d.]"), "").toDoubleOrNull()
-                val squareFootage = binding.squareFootageInput.text.toString().replace(Regex("[^\\d.]"), "").toDoubleOrNull()
-                val downPayment = binding.downPaymentInput.text.toString().replace(Regex("[^\\d.]"), "").toDoubleOrNull()
+                val homePrice = binding.homePriceInput.text.toString().replace(",", "").toDoubleOrNull()
+                val squareFootage = optionalNumber(binding.squareFootageInput, "Square footage")
+                val downPayment = binding.downPaymentInput.text.toString().replace(",", "").toDoubleOrNull()
                 val isDownPaymentPercentage = binding.downPaymentPercent.isChecked
-                val interestRate = binding.interestRateInput.text.toString().replace(Regex("[^\\d.]"), "").toDoubleOrNull()
-                val hoaFees = binding.hoaFeesInput.text.toString().replace(Regex("[^\\d.]"), "").toDoubleOrNull()
+                val interestRate = binding.interestRateInput.text.toString().replace(",", "").toDoubleOrNull()
+                val hoaFees = optionalNumber(binding.hoaFeesInput, "HOA fees")
                 val loanTermYears = if (binding.loanTerm15.isChecked) 15 else 30
 
                 if (homePrice == null || downPayment == null || interestRate == null) {
@@ -124,6 +163,17 @@ class CalculatorFragment : Fragment() {
                     return@setOnClickListener
                 }
 
+                require(binding.stateSpinner.selectedItemPosition > 0) { "Select the purchase state" }
+                val tax = requiredNumber(binding.propertyTaxInput, "Property tax")
+                val insurance = requiredNumber(binding.insuranceInput, "Annual insurance")
+                val variable = if (binding.variableRateSwitch.isChecked) VariableRateOptions(
+                    fixedYears = requiredNumber(binding.fixedYearsInput, "Initial fixed years").let {
+                        require(it % 1.0 == 0.0) { "Initial fixed years must be a whole number" }; it.toInt()
+                    },
+                    annualCap = requiredNumber(binding.annualCapInput, "Annual cap"),
+                    lifetimeCap = requiredNumber(binding.lifetimeCapInput, "Lifetime cap"),
+                    scenario = RateScenario.entries[binding.scenarioSpinner.selectedItemPosition]
+                ) else null
                 val result = viewModel.calculateMortgage(
                     homePrice = homePrice,
                     squareFootage = squareFootage,
@@ -131,7 +181,8 @@ class CalculatorFragment : Fragment() {
                     isDownPaymentPercentage = isDownPaymentPercentage,
                     interestRate = interestRate,
                     loanTermYears = loanTermYears,
-                    hoaFees = hoaFees
+                    hoaFees = hoaFees,
+                    propertyTaxPercent = tax, annualHomeInsurance = insurance, variableRate = variable
                 )
                 sharedViewModel.setCalculation(result)
                 // Also update comparison automatically
@@ -141,10 +192,10 @@ class CalculatorFragment : Fragment() {
                     downPayment = downPayment,
                     isDownPaymentPercentage = isDownPaymentPercentage,
                     interestRate = interestRate,
-                    hoaFees = hoaFees
+                    hoaFees = hoaFees,
+                    propertyTaxPercent = tax, annualHomeInsurance = insurance, variableRate = variable
                 )
                 sharedViewModel.setComparison(comparison)
-                displayResults(result)
             } catch (e: Exception) {
                 val msg = e.message ?: "An unexpected error occurred."
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
@@ -153,7 +204,7 @@ class CalculatorFragment : Fragment() {
     }
 
     private fun displayResults(result: MortgageCalculation) {
-        binding.monthlyPaymentResult.text = "Monthly Payment: ${currencyFormat.format(result.monthlyPayment)}"
+        binding.monthlyPaymentResult.text = "Initial Monthly Payment: ${currencyFormat.format(result.monthlyPayment)}"
         binding.totalCostResult.text = "Total Cost: ${currencyFormat.format(result.totalCost)}"
         binding.principalInterestBreakdown.text = "Principal: ${currencyFormat.format(result.totalPrincipal)}\nInterest: ${currencyFormat.format(result.totalInterest)}"
 
@@ -164,17 +215,23 @@ class CalculatorFragment : Fragment() {
         }
 
         binding.breakdownResult.text = """
-            Monthly Breakdown:
+            Initial Monthly Breakdown:
             Principal & Interest: ${currencyFormat.format(result.monthlyBreakdown.principalAndInterest)}
             Property Tax: ${currencyFormat.format(result.monthlyBreakdown.propertyTax)}
             Home Insurance: ${currencyFormat.format(result.monthlyBreakdown.homeInsurance)}
             HOA Fees: ${currencyFormat.format(result.monthlyBreakdown.hoaFees)}
         """.trimIndent()
 
+        binding.projectionResult.text = if (result.variableRate != null) {
+            val payments = result.schedule
+            "Estimated monthly range: ${currencyFormat.format(payments.minOf { it.totalPayment })}–${currencyFormat.format(payments.maxOf { it.totalPayment })}\n" +
+                "Annual rate / monthly payment (tax, insurance and HOA held constant):\n" +
+                payments.filter { (it.month - 1) % 12 == 0 }.joinToString("\n") {
+                    "Year ${(it.month - 1) / 12 + 1}: ${String.format(Locale.US, "%.2f%%", it.annualRate)} · ${currencyFormat.format(it.totalPayment)}"
+                }
+        } else "Fixed rate throughout the loan."
         updateChart(result.monthlyBreakdown)
-        
-        // Update amortization chart
-        (activity as? MainActivity)?.updateAmortizationChart(result)
+
     }
 
     private fun updateChart(breakdown: MonthlyBreakdown) {
@@ -205,6 +262,8 @@ class CalculatorFragment : Fragment() {
                 })
                 invalidate()
             }
+        } else {
+            binding.paymentBreakdownChart.clear()
         }
     }
 

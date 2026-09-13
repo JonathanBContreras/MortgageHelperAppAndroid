@@ -68,7 +68,10 @@ class ComparisonFragment : Fragment() {
         val monthlyFees15 = calc15.monthlyBreakdown.hoaFees + calc15.monthlyBreakdown.homeInsurance
         val monthlyTax30 = calc30.monthlyBreakdown.propertyTax
         val monthlyFees30 = calc30.monthlyBreakdown.hoaFees + calc30.monthlyBreakdown.homeInsurance
-        addRow("Monthly Payment", currency(calc15.monthlyPayment), currency(calc30.monthlyPayment))
+        addRow("Initial Monthly", currency(calc15.monthlyPayment), currency(calc30.monthlyPayment))
+        if (calc15.variableRate != null) {
+            addRow("Peak Monthly", currency(calc15.schedule.maxOf { it.totalPayment }), currency(calc30.schedule.maxOf { it.totalPayment }))
+        }
         addRow("Total Cost", currency(calc15.totalCost), currency(calc30.totalCost))
         addRow("Principal", currency(calc15.totalPrincipal), currency(calc30.totalPrincipal))
         addRow("Interest", currency(calc15.totalInterest), currency(calc30.totalInterest))
